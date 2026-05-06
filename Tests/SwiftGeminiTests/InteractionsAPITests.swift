@@ -124,6 +124,37 @@ struct GeminiInteractionsAPIShapeTests {
     #expect(!json.contains("\"instructions\""), "Encoded request must not contain 'instructions'")
   }
 
+  @Test("encodes thinking_config inside generation_config")
+  func encodesThinkingConfig() throws {
+    let request = GeminiInteractionRequest(
+      model: "gemini-3-flash-preview",
+      input: .text("hi"),
+      generationConfig: GeminiInteractionGenerationConfig(
+        thinkingConfig: GeminiThinkingConfig(level: "high", includeThoughts: true)
+      )
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let json = String(data: try encoder.encode(request), encoding: .utf8) ?? ""
+    #expect(json.contains("\"thinking_config\":"), "Expected thinking_config in: \(json)")
+    #expect(json.contains("\"thinking_level\":\"high\""), "Expected thinking_level in: \(json)")
+    #expect(json.contains("\"include_thoughts\":true"), "Expected include_thoughts in: \(json)")
+    // budget is nil and should be omitted.
+    #expect(!json.contains("thinking_budget"), "Did not expect thinking_budget in: \(json)")
+  }
+
+  @Test("encodes thinking_budget when set without level")
+  func encodesThinkingBudget() throws {
+    let config = GeminiInteractionGenerationConfig(
+      thinkingConfig: GeminiThinkingConfig(budget: 1024)
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let json = String(data: try encoder.encode(config), encoding: .utf8) ?? ""
+    #expect(json.contains("\"thinking_budget\":1024"), "Expected thinking_budget in: \(json)")
+    #expect(!json.contains("thinking_level"), "Did not expect thinking_level in: \(json)")
+  }
+
   @Test("decodes a synchronous interaction response")
   func decodesInteractionResponse() throws {
     let payload = #"""
