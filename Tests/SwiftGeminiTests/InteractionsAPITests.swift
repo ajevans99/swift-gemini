@@ -233,4 +233,36 @@ struct GeminiInteractionsAPIShapeTests {
     #expect(event.interaction?.id == "v1_def")
     #expect(event.interaction?.status == "in_progress")
   }
+
+  @Test("decodes function_call delta with id, name, and arguments")
+  func decodesFunctionCallDelta() throws {
+    // Gemini emits the function name + arguments in `content.delta`,
+    // NOT in `content.start` (which only carries `id` + `type`). Callers
+    // must read `name` from the delta to round-trip it back as the
+    // `function_result.name` on the next interaction. Regression test
+    // for HTTP 400 "Request contains an invalid argument" caused by
+    // sending a fallback name.
+    let payload = #"""
+      {
+        "index": 1,
+        "delta": {
+          "id": "iapk9ry8",
+          "type": "function_call",
+          "name": "get_weather",
+          "arguments": {"location": "Paris"}
+        },
+        "event_type": "content.delta"
+      }
+      """#
+    let event = try JSONDecoder().decode(
+      GeminiInteractionStreamEvent.self,
+      from: payload.data(using: .utf8)!
+    )
+    #expect(event.eventType == "content.delta")
+    #expect(event.index == 1)
+    #expect(event.delta?.id == "iapk9ry8")
+    #expect(event.delta?.type == "function_call")
+    #expect(event.delta?.name == "get_weather")
+    #expect(event.delta?.arguments != nil)
+  }
 }

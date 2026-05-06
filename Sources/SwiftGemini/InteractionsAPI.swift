@@ -554,19 +554,36 @@ public struct GeminiInteractionStreamDelta: Codable, Sendable {
   public var data: String?
   public var mimeType: String?
   public var arguments: GeminiJSONValue?
+  /// On `function_call` deltas Gemini repeats the call's `id` here. We
+  /// already know it from the preceding `content.start`, but capturing it
+  /// makes the delta self-describing for callers that skip `content.start`.
+  public var id: String?
+  /// Mirrors the parent content's `type` ("function_call", "text", etc.)
+  /// when the server sends it, otherwise `nil`.
+  public var type: String?
+  /// On `function_call` deltas Gemini sends the function name here, NOT on
+  /// `content.start` (which only carries `id` + `type`). Callers must read
+  /// the name from the delta.
+  public var name: String?
 
   public init(
     text: String? = nil,
     signature: String? = nil,
     data: String? = nil,
     mimeType: String? = nil,
-    arguments: GeminiJSONValue? = nil
+    arguments: GeminiJSONValue? = nil,
+    id: String? = nil,
+    type: String? = nil,
+    name: String? = nil
   ) {
     self.text = text
     self.signature = signature
     self.data = data
     self.mimeType = mimeType
     self.arguments = arguments
+    self.id = id
+    self.type = type
+    self.name = name
   }
 
   enum CodingKeys: String, CodingKey {
@@ -575,6 +592,9 @@ public struct GeminiInteractionStreamDelta: Codable, Sendable {
     case data
     case mimeType = "mime_type"
     case arguments
+    case id
+    case type
+    case name
   }
 }
 
