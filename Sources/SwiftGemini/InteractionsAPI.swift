@@ -300,7 +300,13 @@ public struct GeminiInteractionGenerationConfig: Codable, Sendable {
   public var topK: Int?
   public var maxOutputTokens: Int?
   public var imageConfig: GeminiInteractionImageConfig?
-  public var thinkingConfig: GeminiThinkingConfig?
+  /// Reasoning level for Gemini 3+ models. Accepted values:
+  /// `minimal` / `low` / `medium` / `high`. See
+  /// https://ai.google.dev/api/interactions-api for per-model defaults.
+  public var thinkingLevel: String?
+  /// Whether the model should emit thought summaries alongside its
+  /// final answer. Accepted values: `auto` (default) and `none`.
+  public var thinkingSummaries: String?
 
   public init(
     temperature: Double? = nil,
@@ -308,14 +314,16 @@ public struct GeminiInteractionGenerationConfig: Codable, Sendable {
     topK: Int? = nil,
     maxOutputTokens: Int? = nil,
     imageConfig: GeminiInteractionImageConfig? = nil,
-    thinkingConfig: GeminiThinkingConfig? = nil
+    thinkingLevel: String? = nil,
+    thinkingSummaries: String? = nil
   ) {
     self.temperature = temperature
     self.topP = topP
     self.topK = topK
     self.maxOutputTokens = maxOutputTokens
     self.imageConfig = imageConfig
-    self.thinkingConfig = thinkingConfig
+    self.thinkingLevel = thinkingLevel
+    self.thinkingSummaries = thinkingSummaries
   }
 
   enum CodingKeys: String, CodingKey {
@@ -324,39 +332,8 @@ public struct GeminiInteractionGenerationConfig: Codable, Sendable {
     case topK
     case maxOutputTokens
     case imageConfig = "image_config"
-    case thinkingConfig = "thinking_config"
-  }
-}
-
-/// Controls how much reasoning the model performs before producing its
-/// final answer. Gemini 3 models prefer ``level``
-/// (`"minimal"` / `"low"` / `"medium"` / `"high"`); Gemini 2.5 series use
-/// ``budget`` (token count, with `0` to disable and `-1` for dynamic).
-/// ``includeThoughts`` requests that the model emit thought summaries
-/// alongside its final answer (default `false`).
-///
-/// Per the Gemini docs only one of `level` / `budget` should be set for a
-/// given model family. See https://ai.google.dev/gemini-api/docs/thinking
-/// for per-model defaults and ranges.
-public struct GeminiThinkingConfig: Codable, Sendable, Equatable {
-  public var level: String?
-  public var budget: Int?
-  public var includeThoughts: Bool?
-
-  public init(
-    level: String? = nil,
-    budget: Int? = nil,
-    includeThoughts: Bool? = nil
-  ) {
-    self.level = level
-    self.budget = budget
-    self.includeThoughts = includeThoughts
-  }
-
-  enum CodingKeys: String, CodingKey {
-    case level = "thinking_level"
-    case budget = "thinking_budget"
-    case includeThoughts = "include_thoughts"
+    case thinkingLevel = "thinking_level"
+    case thinkingSummaries = "thinking_summaries"
   }
 }
 
