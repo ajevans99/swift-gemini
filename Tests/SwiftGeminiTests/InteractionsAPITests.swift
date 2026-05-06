@@ -104,6 +104,26 @@ struct GeminiInteractionsAPIShapeTests {
     #expect(json.contains("\"response_modalities\":[\"IMAGE\",\"TEXT\"]"))
   }
 
+  @Test("encodes systemInstruction as system_instruction (not 'instructions')")
+  func encodesSystemInstructionSnakeCase() throws {
+    // Regression test for HTTP 400 "Unknown parameter 'instructions'": the
+    // Gemini Interactions API field is `system_instruction`, not the
+    // OpenAI-style `instructions`.
+    let request = GeminiInteractionRequest(
+      model: "gemini-3-flash-preview",
+      input: .text("hi"),
+      systemInstruction: "You are a helpful assistant."
+    )
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+    let json = String(data: try encoder.encode(request), encoding: .utf8) ?? ""
+    #expect(
+      json.contains("\"system_instruction\":\"You are a helpful assistant.\""),
+      "Expected system_instruction in encoded request, got: \(json)"
+    )
+    #expect(!json.contains("\"instructions\""), "Encoded request must not contain 'instructions'")
+  }
+
   @Test("decodes a synchronous interaction response")
   func decodesInteractionResponse() throws {
     let payload = #"""

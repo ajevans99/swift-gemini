@@ -67,7 +67,7 @@ public struct GeminiInteractionRequest: Codable, Sendable {
   public var agent: String?
   public var input: GeminiInteractionInput
   public var previousInteractionId: String?
-  public var instructions: String?
+  public var systemInstruction: String?
   public var responseModalities: [GeminiResponseModality]?
   public var tools: [GeminiInteractionTool]?
   public var toolConfig: GeminiInteractionToolConfig?
@@ -81,7 +81,7 @@ public struct GeminiInteractionRequest: Codable, Sendable {
     agent: String? = nil,
     input: GeminiInteractionInput,
     previousInteractionId: String? = nil,
-    instructions: String? = nil,
+    systemInstruction: String? = nil,
     responseModalities: [GeminiResponseModality]? = nil,
     tools: [GeminiInteractionTool]? = nil,
     toolConfig: GeminiInteractionToolConfig? = nil,
@@ -94,7 +94,7 @@ public struct GeminiInteractionRequest: Codable, Sendable {
     self.agent = agent
     self.input = input
     self.previousInteractionId = previousInteractionId
-    self.instructions = instructions
+    self.systemInstruction = systemInstruction
     self.responseModalities = responseModalities
     self.tools = tools
     self.toolConfig = toolConfig
@@ -109,7 +109,7 @@ public struct GeminiInteractionRequest: Codable, Sendable {
     case agent
     case input
     case previousInteractionId = "previous_interaction_id"
-    case instructions
+    case systemInstruction = "system_instruction"
     case responseModalities = "response_modalities"
     case tools
     case toolConfig = "tool_config"
