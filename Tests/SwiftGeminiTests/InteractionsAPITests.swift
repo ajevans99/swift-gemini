@@ -101,7 +101,13 @@ struct GeminiInteractionsAPIShapeTests {
     encoder.outputFormatting = [.sortedKeys]
     let json = String(data: try encoder.encode(request), encoding: .utf8) ?? ""
     #expect(json.contains("\"previous_interaction_id\":\"v1_abc\""))
-    #expect(json.contains("\"response_modalities\":[\"IMAGE\",\"TEXT\"]"))
+    // Regression: the Interactions API rejects uppercase 'IMAGE' / 'TEXT'
+    // (those are the legacy `:generateContent` rawValues). Lowercase is
+    // required: HTTP 400 'value 'IMAGE' is not supported for
+    // 'response_modalities[0]''.
+    #expect(json.contains("\"response_modalities\":[\"image\",\"text\"]"))
+    #expect(!json.contains("\"IMAGE\""), "Interactions API requires lowercase modality values")
+    #expect(!json.contains("\"TEXT\""), "Interactions API requires lowercase modality values")
   }
 
   @Test("encodes systemInstruction as system_instruction (not 'instructions')")

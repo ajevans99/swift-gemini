@@ -68,7 +68,7 @@ public struct GeminiInteractionRequest: Codable, Sendable {
   public var input: GeminiInteractionInput
   public var previousInteractionId: String?
   public var systemInstruction: String?
-  public var responseModalities: [GeminiResponseModality]?
+  public var responseModalities: [GeminiInteractionResponseModality]?
   public var tools: [GeminiInteractionTool]?
   public var toolConfig: GeminiInteractionToolConfig?
   public var generationConfig: GeminiInteractionGenerationConfig?
@@ -82,7 +82,7 @@ public struct GeminiInteractionRequest: Codable, Sendable {
     input: GeminiInteractionInput,
     previousInteractionId: String? = nil,
     systemInstruction: String? = nil,
-    responseModalities: [GeminiResponseModality]? = nil,
+    responseModalities: [GeminiInteractionResponseModality]? = nil,
     tools: [GeminiInteractionTool]? = nil,
     toolConfig: GeminiInteractionToolConfig? = nil,
     generationConfig: GeminiInteractionGenerationConfig? = nil,
@@ -119,6 +119,20 @@ public struct GeminiInteractionRequest: Codable, Sendable {
     case stream
   }
 }
+
+/// Modality enum for the **Interactions API** (different lowercase
+/// rawValues than the legacy `:generateContent` `GeminiResponseModality`,
+/// and a wider set: `document` / `video` are valid here too). The
+/// Interactions endpoint rejects the uppercase legacy values with HTTP
+/// 400 ("'IMAGE' is not supported for 'response_modalities[0]'").
+public enum GeminiInteractionResponseModality: String, Codable, Sendable {
+  case text
+  case image
+  case audio
+  case video
+  case document
+}
+
 
 /// `input` accepts either a bare prompt string or an ordered list of input
 /// items. We model both shapes so callers can use whichever is most natural.
