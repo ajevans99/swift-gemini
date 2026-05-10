@@ -131,6 +131,12 @@ extension GeminiClient {
   /// `data:` payload that successfully parses. Lines that fail to decode are
   /// skipped silently — the API occasionally interleaves comment-only lines
   /// (`:keep-alive`) and we don't want one bad event to abort the stream.
+  ///
+  /// On Apple platforms this uses `URLSession.bytes(for:)` for true incremental
+  /// streaming. On Linux that overload doesn't exist, so we fall back to
+  /// `URLSession.data(for:)` (whole response) and parse the SSE payload all
+  /// at once at the end of the request — callers still receive every event,
+  /// just not until the upstream server closes the stream.
   func streamSSE<Event: Decodable & Sendable>(
     _ request: URLRequest,
     decodeAs _: Event.Type
@@ -138,62 +144,114 @@ extension GeminiClient {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
-          let (bytes, response) = try await urlSession.bytes(for: request)
-          guard let http = response as? HTTPURLResponse else {
-            throw GeminiTransportError.nonHTTPResponse
-          }
-          guard (200...299).contains(http.statusCode) else {
-            var collected = Data()
-            for try await byte in bytes {
-              collected.append(byte)
-              if collected.count >= 16 * 1024 { break }
+          #if canImport(FoundationNetworking)
+            // Linux: no URLSession.bytes(for:). Buffer the whole response,
+            // then dispatch SSE events to the continuation.
+            let (data, response) = try await urlSession.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+              throw GeminiTransportError.nonHTTPResponse
             }
-            throw GeminiTransportError.httpError(
-              statusCode: http.statusCode,
-              body: String(data: collected, encoding: .utf8)
-            )
-          }
+            guard (200...299).contains(http.statusCode) else {
+              let preview = data.prefix(16 * 1024)
+              throw GeminiTransportError.httpError(
+                statusCode: http.statusCode,
+                body: String(data: preview, encoding: .utf8)
+              )
+            }
+            let payload = String(decoding: data, as: UTF8.self)
+            let lines = payload.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+              .map(String.init)
+            var dataBuffer = ""
+            let decoder = JSONDecoder()
 
-          let decoder = JSONDecoder()
-          var dataBuffer = ""
+            func flush() {
+              guard !dataBuffer.isEmpty else { return }
+              defer { dataBuffer = "" }
+              if dataBuffer == "[DONE]" { return }
+              guard let payload = dataBuffer.data(using: .utf8) else { return }
+              if let event = try? decoder.decode(Event.self, from: payload) {
+                continuation.yield(event)
+              }
+            }
 
-          func flush() {
-            guard !dataBuffer.isEmpty else { return }
-            defer { dataBuffer = "" }
-            // The Gemini Interactions stream terminates with the literal
-            // payload `[DONE]` after the `interaction.complete` event.
-            if dataBuffer == "[DONE]" { return }
-            guard let payload = dataBuffer.data(using: .utf8) else { return }
-            if let event = try? decoder.decode(Event.self, from: payload) {
-              continuation.yield(event)
+            for line in lines {
+              if line.isEmpty {
+                flush()
+                continue
+              }
+              if line.hasPrefix(":") { continue }
+              if line.hasPrefix("event:") {
+                flush()
+                continue
+              }
+              if line.hasPrefix("data:") {
+                let value = line.dropFirst("data:".count)
+                  .drop(while: { $0 == " " })
+                if !dataBuffer.isEmpty { dataBuffer.append("\n") }
+                dataBuffer.append(String(value))
+                continue
+              }
             }
-          }
+            flush()
+            continuation.finish()
+          #else
+            let (bytes, response) = try await urlSession.bytes(for: request)
+            guard let http = response as? HTTPURLResponse else {
+              throw GeminiTransportError.nonHTTPResponse
+            }
+            guard (200...299).contains(http.statusCode) else {
+              var collected = Data()
+              for try await byte in bytes {
+                collected.append(byte)
+                if collected.count >= 16 * 1024 { break }
+              }
+              throw GeminiTransportError.httpError(
+                statusCode: http.statusCode,
+                body: String(data: collected, encoding: .utf8)
+              )
+            }
 
-          for try await line in bytes.lines {
-            if line.isEmpty {
-              flush()
-              continue
+            let decoder = JSONDecoder()
+            var dataBuffer = ""
+
+            func flush() {
+              guard !dataBuffer.isEmpty else { return }
+              defer { dataBuffer = "" }
+              // The Gemini Interactions stream terminates with the literal
+              // payload `[DONE]` after the `interaction.complete` event.
+              if dataBuffer == "[DONE]" { return }
+              guard let payload = dataBuffer.data(using: .utf8) else { return }
+              if let event = try? decoder.decode(Event.self, from: payload) {
+                continuation.yield(event)
+              }
             }
-            if line.hasPrefix(":") { continue }
-            if line.hasPrefix("event:") {
-              // The arrival of a new SSE event boundary in a stream where
-              // `bytes.lines` has already stripped the blank delimiter — flush
-              // any data accumulated under the previous event before starting
-              // the next one.
-              flush()
-              continue
+
+            for try await line in bytes.lines {
+              if line.isEmpty {
+                flush()
+                continue
+              }
+              if line.hasPrefix(":") { continue }
+              if line.hasPrefix("event:") {
+                // The arrival of a new SSE event boundary in a stream where
+                // `bytes.lines` has already stripped the blank delimiter — flush
+                // any data accumulated under the previous event before starting
+                // the next one.
+                flush()
+                continue
+              }
+              if line.hasPrefix("data:") {
+                let value = line.dropFirst("data:".count)
+                  .drop(while: { $0 == " " })
+                if !dataBuffer.isEmpty { dataBuffer.append("\n") }
+                dataBuffer.append(String(value))
+                continue
+              }
+              // id:, retry:, or unknown — currently ignored.
             }
-            if line.hasPrefix("data:") {
-              let value = line.dropFirst("data:".count)
-                .drop(while: { $0 == " " })
-              if !dataBuffer.isEmpty { dataBuffer.append("\n") }
-              dataBuffer.append(String(value))
-              continue
-            }
-            // id:, retry:, or unknown — currently ignored.
-          }
-          flush()
-          continuation.finish()
+            flush()
+            continuation.finish()
+          #endif
         } catch {
           continuation.finish(throwing: error)
         }
